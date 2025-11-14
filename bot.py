@@ -23,7 +23,7 @@ async def aliexpress_search(keyword):
     params = {
         "method": "aliexpress.affiliate.product.query",
         "app_key": APP_ID,
-        "timestamp": str(int(time.time())),  # حول إلى string
+        "timestamp": str(int(time.time())),
         "keywords": keyword,
         "fields": "product_title,product_main_image_url,product_url,promotion_link"
     }
@@ -41,7 +41,6 @@ async def handle_message(message: types.Message):
     try:
         data = await aliexpress_search(keyword)
         
-        # تحقق من هيكل الاستجابة بشكل أفضل
         if "error" in data:
             await message.answer(f"❌ خطأ في API: {data['error']}")
             return
@@ -56,6 +55,8 @@ async def handle_message(message: types.Message):
             title = item.get("product_title", "بدون عنوان")
             img = item.get("product_main_image_url", "")
             link = item.get("promotion_link", "")
+            
+            # السطر المصحح - لا توجد أخطاء في f-string
             text = f"📌 *{title}*\n🔗 {link}"
 
             if img:
