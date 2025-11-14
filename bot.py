@@ -1,6 +1,5 @@
 import logging
-from aiogram import Bot, Dispatcher, types
-from aiogram.utils import executor
+from aiogram import Bot, Dispatcher, executor, types
 import aiohttp
 import hashlib
 import time
@@ -23,7 +22,7 @@ async def aliexpress_search(keyword):
     params = {
         "method": "aliexpress.affiliate.product.query",
         "app_key": APP_ID,
-        "timestamp": str(int(time.time())),
+        "timestamp": int(time.time()),
         "keywords": keyword,
         "fields": "product_title,product_main_image_url,product_url,promotion_link"
     }
@@ -40,11 +39,6 @@ async def handle_message(message: types.Message):
 
     try:
         data = await aliexpress_search(keyword)
-        
-        if "error" in data:
-            await message.answer(f"❌ خطأ في API: {data['error']}")
-            return
-            
         items = data.get("resp_result", {}).get("result", {}).get("products", [])
 
         if not items:
@@ -55,7 +49,6 @@ async def handle_message(message: types.Message):
             title = item.get("product_title", "بدون عنوان")
             img = item.get("product_main_image_url", "")
             link = item.get("promotion_link", "")
-            
             text = f"📌 *{title}*\n🔗 {link}"
 
             if img:
@@ -64,8 +57,7 @@ async def handle_message(message: types.Message):
                 await message.answer(text, parse_mode="Markdown")
 
     except Exception as e:
-        logging.error(f"Error: {e}")
-        await message.answer(f"⚠️ خطأ أثناء جلب النتائج:\n{str(e)}")
+        await message.answer(f"⚠️ خطأ أثناء جلب النتائج:\n{e}")
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
