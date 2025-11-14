@@ -23,7 +23,7 @@ async def aliexpress_search(keyword):
     params = {
         "method": "aliexpress.affiliate.product.query",
         "app_key": APP_ID,
-        "timestamp": int(time.time()),
+        "timestamp": str(int(time.time())),  # حول إلى string
         "keywords": keyword,
         "fields": "product_title,product_main_image_url,product_url,promotion_link"
     }
@@ -40,6 +40,12 @@ async def handle_message(message: types.Message):
 
     try:
         data = await aliexpress_search(keyword)
+        
+        # تحقق من هيكل الاستجابة بشكل أفضل
+        if "error" in data:
+            await message.answer(f"❌ خطأ في API: {data['error']}")
+            return
+            
         items = data.get("resp_result", {}).get("result", {}).get("products", [])
 
         if not items:
@@ -50,8 +56,7 @@ async def handle_message(message: types.Message):
             title = item.get("product_title", "بدون عنوان")
             img = item.get("product_main_image_url", "")
             link = item.get("promotion_link", "")
-            text = f"📌 *{title}*
-🔗 {link}"
+            text = f"📌 *{title}*\n🔗 {link}"
 
             if img:
                 await message.answer_photo(photo=img, caption=text, parse_mode="Markdown")
@@ -59,8 +64,8 @@ async def handle_message(message: types.Message):
                 await message.answer(text, parse_mode="Markdown")
 
     except Exception as e:
-        await message.answer(f"⚠️ خطأ أثناء جلب النتائج:
-{e}")
+        logging.error(f"Error: {e}")
+        await message.answer(f"⚠️ خطأ أثناء جلب النتائج:\n{str(e)}")
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
