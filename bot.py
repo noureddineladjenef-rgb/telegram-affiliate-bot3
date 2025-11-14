@@ -1,55 +1,45 @@
-# bot.py
+import os
+from aiogram import Bot, Dispatcher, types, executor
 import requests
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# معلومات البوت الخاصة بك
-BOT_TOKEN = "6986501751:AAF0Ra11pXvdob21IQ9QORLCpc1XPUPFyes"
+# قراءة المتغيرات من GitHub Secrets أو Environment
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+AFFILIATE_ID = os.getenv("AFFILIATE_ID")
+TRACKING_API_KEY = os.getenv("TRACKING_API_KEY")  # اختياري
 
-# معلومات AliExpress API
-ALI_API_KEY = "WXwrOePAXsTmqIRPvlxtfTAg45jDFtxC"
-ALI_PID = "503368"
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot)
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text(
-        "مرحبا! 🚀\nأرسل رابط المنتج الذي تريد معرفة أقل سعر له."
+# ===== رابط الأفليت =====
+def generate_affiliate_link(product_url):
+    return f"{product_url}?aff_fcid={AFFILIATE_ID}"
+
+# ===== start =====
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    await message.reply(
+        "👋 أهلاً! أرسل رقم التتبع أو رابط المنتج.\n"
+        "سأعطيك حالة الشحنة أو رابط أفليت تلقائي."
     )
 
-def get_lowest_price(product_url):
-    """
-    دالة للبحث عن أقل سعر عبر AliExpress Affiliate API
-    """
-    api_url = "https://api.taobao.com/router/rest"  # مثال، يمكن تغييره حسب مزود API
-    params = {
-        "method": "aliexpress.affiliate.product.query",
-        "app_key": ALI_API_KEY,
-        "pid": ALI_PID,
-        "url": product_url,
-        "format": "json"
-    }
+# ===== handler =====
+@dp.message_handler()
+async def handler(message: types.Message):
+    text = message.text.strip()
+
+    # إذا رابط منتج → نحوله أفليت
+    if text.startswith("http"):
+        link = generate_affiliate_link(text)
+        await message.reply(f"🔗 رابط أفليت جاهز:\n{link}")
+        return
+
+    # إذا رقم تتبع → API
+    tracking = text
     try:
-        response = requests.get(api_url, params=params, timeout=10)
-        data = response.json()
-        # تأكد من مسار البيانات حسب API
-        if "result" in data and len(data["result"]) > 0:
-            price = data["result"][0].get("min_price", "غير متوفر")
-            title = data["result"][0].get("product_title", "المنتج")
-            link = data["result"][0].get("product_url", product_url)
-            return f"{title}\nأقل سعر: {price}\nرابط الشراء: {link}"
-        else:
-            return "عذرًا، لم أتمكن من العثور على سعر للمنتج."
-    except Exception as e:
-        return f"حدث خطأ أثناء البحث: {e}"
-
-def handle_link(update: Update, context: CallbackContext):
-    product_link = update.message.text
-    update.message.reply_text("جاري البحث عن أفضل سعر... 🔍")
-    result = get_lowest_price(product_link)
-    update.message.reply_text(result)
-
-def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add
+        # ضع API التتبع الحقيقي لاحقاً
+        response = requests.get(
+            f"https://api.example.com/track/{tracking}?key={TRACKING_API_KEY}"
+        )
+        if response.status_code == 200:
+            data = response.json()
+            status = data.get("status", "لا توجد بيانات متاحة")
