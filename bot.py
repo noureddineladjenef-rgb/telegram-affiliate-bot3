@@ -1,39 +1,55 @@
-from aiogram import Bot, Dispatcher, executor, types
-import aiohttp
+# bot.py
+import requests
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-TELEGRAM_TOKEN = "6986501751:AAF0Ra1lpXvdob21IQ9QORLCpclXPUPFyes"
+# معلومات البوت الخاصة بك
+BOT_TOKEN = "6986501751:AAF0Ra11pXvdob21IQ9QORLCpc1XPUPFyes"
 
-bot = Bot(token=TELEGRAM_TOKEN)
-dp = Dispatcher(bot)
+# معلومات AliExpress API
+ALI_API_KEY = "WXwrOePAXsTmqIRPvlxtfTAg45jDFtxC"
+ALI_PID = "503368"
 
-async def aliexpress_search(keyword):
-    # مثال بسيط، يمكنك تعديل الرابط إلى API رسمي لاحقًا
-    url = f"https://api.aliexpress.com/v2/api?method=aliexpress.affiliate.product.query&keywords={keyword}&app_key=503368"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as r:
-            return await r.json()
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        "مرحبا! 🚀\nأرسل رابط المنتج الذي تريد معرفة أقل سعر له."
+    )
 
-@dp.message_handler()
-async def handle_message(message: types.Message):
-    keyword = message.text.strip()
-    await message.answer("🔍 جاري البحث …")
-    
-    data = await aliexpress_search(keyword)
-    items = data.get("resp_result", {}).get("result", {}).get("products", [])
-
-    if not items:
-        await message.answer("❌ لم يتم العثور على منتجات.")
-        return
-
-    for item in items[:3]:
-        title = item.get("product_title", "بدون عنوان")
-        link = item.get("promotion_link", "")
-        img = item.get("product_main_image_url", "")
-
-        if img:
-            await message.answer_photo(photo=img, caption=f"{title}\n{link}")
+def get_lowest_price(product_url):
+    """
+    دالة للبحث عن أقل سعر عبر AliExpress Affiliate API
+    """
+    api_url = "https://api.taobao.com/router/rest"  # مثال، يمكن تغييره حسب مزود API
+    params = {
+        "method": "aliexpress.affiliate.product.query",
+        "app_key": ALI_API_KEY,
+        "pid": ALI_PID,
+        "url": product_url,
+        "format": "json"
+    }
+    try:
+        response = requests.get(api_url, params=params, timeout=10)
+        data = response.json()
+        # تأكد من مسار البيانات حسب API
+        if "result" in data and len(data["result"]) > 0:
+            price = data["result"][0].get("min_price", "غير متوفر")
+            title = data["result"][0].get("product_title", "المنتج")
+            link = data["result"][0].get("product_url", product_url)
+            return f"{title}\nأقل سعر: {price}\nرابط الشراء: {link}"
         else:
-            await message.answer(f"{title}\n{link}")
+            return "عذرًا، لم أتمكن من العثور على سعر للمنتج."
+    except Exception as e:
+        return f"حدث خطأ أثناء البحث: {e}"
 
-if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
+def handle_link(update: Update, context: CallbackContext):
+    product_link = update.message.text
+    update.message.reply_text("جاري البحث عن أفضل سعر... 🔍")
+    result = get_lowest_price(product_link)
+    update.message.reply_text(result)
+
+def main():
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", start))
+    dp.add
