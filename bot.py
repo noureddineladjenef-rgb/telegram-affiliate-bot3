@@ -1,5 +1,9 @@
 import logging
-from aiogram import Bot, Dispatcher, executor, types
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
+import asyncio
 import aiohttp
 import hashlib
 import time
@@ -14,8 +18,9 @@ APP_SECRET = "WXwrOePAXsTmqIRPvlxtfTAg45jDFtxC"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-bot = Bot(token=TELEGRAM_TOKEN)
-dp = Dispatcher(bot)
+# تهيئة البوت مع الإعدادات الافتراضية
+bot = Bot(token=TELEGRAM_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN))
+dp = Dispatcher()
 
 def generate_signature(params, app_secret):
     """إنشاء توقيع API"""
@@ -58,14 +63,14 @@ async def search_aliexpress_products(keyword):
             
         params["sign"] = signature
         
-        # عنوان API الجديد
+        # عنوان API
         api_url = "https://api-sg.aliexpress.com/rest"
         
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, params=params, timeout=30) as response:
                 if response.status == 200:
                     data = await response.json()
-                    logger.info(f"API Response: {json.dumps(data, indent=2)}")
+                    logger.info(f"API Response received for: {keyword}")
                     return data
                 else:
                     logger.error(f"API Error: Status {response.status}")
@@ -78,26 +83,26 @@ async def search_aliexpress_products(keyword):
         logger.error(f"Search error: {e}")
         return None
 
-@dp.message_handler(commands=['start', 'help'])
+@dp.message(Command("start", "help"))
 async def send_welcome(message: types.Message):
     """رسالة ترحيب"""
     welcome_text = """
-    🛍️ *مرحباً بك في بوت AliExpress!*
-    
-    *كيفية الاستخدام:*
-    فقط اكتب اسم المنتج الذي تريد البحث عنه وسأجد لك أفضل العروض.
-    
-    *أمثلة:*
-    📱 `iphone case`
-    💻 `laptop bag`
-    ⌚ `smart watch`
-    🎧 `bluetooth headphones`
-    
-    *ملاحظة:* سأعرض لك أول 3 نتائج من AliExpress.
-    """
-    await message.answer(welcome_text, parse_mode="Markdown")
+🛍️ *مرحباً بك في بوت AliExpress!*
 
-@dp.message_handler()
+*كيفية الاستخدام:*
+فقط اكتب اسم المنتج الذي تريد البحث عنه وسأجد لك أفضل العروض.
+
+*أمثلة:*
+📱 `iphone case`
+💻 `laptop bag` 
+⌚ `smart watch`
+🎧 `bluetooth headphones`
+
+*ملاحظة:* سأعرض لك أول 3 نتائج من AliExpress.
+"""
+    await message.answer(welcome_text)
+
+@dp.message()
 async def handle_search(message: types.Message):
     """معالجة طلبات البحث"""
     keyword = message.text.strip()
@@ -125,7 +130,8 @@ async def handle_search(message: types.Message):
             return
         
         # استخراج المنتجات
-        products = data.get('result', {}).get('products', [])
+        result_data = data.get('result', {})
+        products = result_data.get('products', [])
         
         if not products:
             await message.answer("❌ لم أجد أي منتجات تطابق بحثك. حاول بكلمات أخرى.")
@@ -136,30 +142,35 @@ async def handle_search(message: types.Message):
             title = product.get('productTitle', 'بدون عنوان')
             image_url = product.get('productMainImageUrl', '')
             product_url = product.get('promotionLink', product.get('productUrl', ''))
+            original_price = product.get('originalPrice', '')
+            sale_price = product.get('salePrice', '')
             
             # تنظيف العنوان
             clean_title = title.replace('*', '').replace('_', '').replace('`', '').replace('[', '').replace(']', '')
             
             # بناء رسالة المنتج
-            product_text = f"""
-🛍️ *المنتج {i}:*
-*{clean_title}*
+            product_text = f"""🛍️ *المنتج {i}:*
+*{clean_title}*"""
 
-🔗 [رابط الشراء على AliExpress]({product_url})
-            """
+            # إضافة الأسعار إذا متوفرة
+            if sale_price:
+                product_text += f"\n💰 السعر: {sale_price} USD"
+                if original_price and original_price != sale_price:
+                    product_text += f" (خصم من {original_price} USD)"
+            
+            product_text += f"\n🔗 [رابط الشراء على AliExpress]({product_url})"
             
             try:
                 if image_url and image_url.startswith('http'):
                     await message.answer_photo(
                         photo=image_url,
-                        caption=product_text,
-                        parse_mode="Markdown"
+                        caption=product_text
                     )
                 else:
-                    await message.answer(product_text, parse_mode="Markdown")
+                    await message.answer(product_text)
             except Exception as e:
                 logger.error(f"Error sending product {i}: {e}")
-                await message.answer(product_text, parse_mode="Markdown")
+                await message.answer(product_text)
         
         await message.answer("✅ اكتمل البحث! اكتب كلمة جديدة للبحث عن المزيد من المنتجات.")
         
@@ -173,6 +184,10 @@ async def handle_search(message: types.Message):
         except:
             pass
 
-if __name__ == "__main__":
+async def main():
+    """الدالة الرئيسية"""
     logger.info("🚀 Starting AliExpress Bot...")
-    executor.start_polling(dp, skip_updates=True)
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
