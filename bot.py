@@ -1,45 +1,65 @@
-import os
-from aiogram import Bot, Dispatcher, types, executor
-import requests
+import logging
+from aiogram import Bot, Dispatcher, executor, types
+import aiohttp
+import hashlib
+import time
 
-# قراءة المتغيرات من GitHub Secrets أو Environment
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-AFFILIATE_ID = os.getenv("AFFILIATE_ID")
-TRACKING_API_KEY = os.getenv("TRACKING_API_KEY")  # اختياري
+TELEGRAM_TOKEN = "6986501751:AAF0Ra1lpXvdob21IQ9QORLCpclXPUPFyes"
+APP_ID = "503368"
+APP_SECRET = "WXwrOePAXsTmqIRPvlxtfTAg45jDFtxC"
 
-bot = Bot(token=BOT_TOKEN)
+logging.basicConfig(level=logging.INFO)
+bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(bot)
 
-# ===== رابط الأفليت =====
-def generate_affiliate_link(product_url):
-    return f"{product_url}?aff_fcid={AFFILIATE_ID}"
+def sign(params, app_secret):
+    keys = sorted(params.keys())
+    base = app_secret + ''.join(f"{k}{params[k]}" for k in keys) + app_secret
+    return hashlib.md5(base.encode("utf-8")).hexdigest().upper()
 
-# ===== start =====
-@dp.message_handler(commands=['start'])
-async def start(message: types.Message):
-    await message.reply(
-        "👋 أهلاً! أرسل رقم التتبع أو رابط المنتج.\n"
-        "سأعطيك حالة الشحنة أو رابط أفليت تلقائي."
-    )
+async def aliexpress_search(keyword):
+    url = "https://api.aliexpress.com/v2/api"
+    params = {
+        "method": "aliexpress.affiliate.product.query",
+        "app_key": APP_ID,
+        "timestamp": int(time.time()),
+        "keywords": keyword,
+        "fields": "product_title,product_main_image_url,product_url,promotion_link"
+    }
+    params["sign"] = sign(params, APP_SECRET)
 
-# ===== handler =====
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, params=params) as r:
+            return await r.json()
+
 @dp.message_handler()
-async def handler(message: types.Message):
-    text = message.text.strip()
+async def handle_message(message: types.Message):
+    keyword = message.text
+    await message.answer("🔍 يتم البحث في AliExpress …")
 
-    # إذا رابط منتج → نحوله أفليت
-    if text.startswith("http"):
-        link = generate_affiliate_link(text)
-        await message.reply(f"🔗 رابط أفليت جاهز:\n{link}")
-        return
-
-    # إذا رقم تتبع → API
-    tracking = text
     try:
-        # ضع API التتبع الحقيقي لاحقاً
-        response = requests.get(
-            f"https://api.example.com/track/{tracking}?key={TRACKING_API_KEY}"
-        )
-        if response.status_code == 200:
-            data = response.json()
-            status = data.get("status", "لا توجد بيانات متاحة")
+        data = await aliexpress_search(keyword)
+        items = data.get("resp_result", {}).get("result", {}).get("products", [])
+
+        if not items:
+            await message.answer("❌ لم يتم العثور على منتجات.")
+            return
+
+        for item in items[:3]:
+            title = item.get("product_title", "بدون عنوان")
+            img = item.get("product_main_image_url", "")
+            link = item.get("promotion_link", "")
+            text = f"📌 *{title}*
+🔗 {link}"
+
+            if img:
+                await message.answer_photo(photo=img, caption=text, parse_mode="Markdown")
+            else:
+                await message.answer(text, parse_mode="Markdown")
+
+    except Exception as e:
+        await message.answer(f"⚠️ خطأ أثناء جلب النتائج:
+{e}")
+
+if __name__ == "__main__":
+    executor.start_polling(dp, skip_updates=True)
