@@ -3,125 +3,176 @@ from aiogram import Bot, Dispatcher, executor, types
 import aiohttp
 import hashlib
 import time
+import json
 
-# التوكنات والمفاتيح - يفضل استخدام environment variables
+# التوكنات - تأكد من صحتها
 TELEGRAM_TOKEN = "6986501751:AAF0Ra1lpXvdob21IQ9QORLCpclXPUPFyes"
 APP_ID = "503368"
 APP_SECRET = "WXwrOePAXsTmqIRPvlxtfTAg45jDFtxC"
 
 # تهيئة logging
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(bot)
 
-def sign(params, app_secret):
-    """إنشاء التوقيع للـ API"""
-    keys = sorted(params.keys())
-    base = app_secret + ''.join(f"{k}{params[k]}" for k in keys) + app_secret
-    return hashlib.md5(base.encode("utf-8")).hexdigest().upper()
-
-async def aliexpress_search(keyword):
-    """البحث في AliExpress API"""
-    url = "https://api.aliexpress.com/v2/api"
-    params = {
-        "method": "aliexpress.affiliate.product.query",
-        "app_key": APP_ID,
-        "timestamp": str(int(time.time())),  # تحويل إلى string
-        "keywords": keyword,
-        "fields": "product_title,product_main_image_url,product_url,promotion_link",
-        "sign_method": "md5"
-    }
-    
-    # إضافة التوقيع
-    params["sign"] = sign(params, APP_SECRET)
-
+def generate_signature(params, app_secret):
+    """إنشاء توقيع API"""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=30) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    logging.error(f"API Error: {response.status}")
-                    return None
+        # ترتيب المعاملات أبجديًا
+        sorted_params = sorted(params.items())
+        
+        # بناء سلسلة للتوقيع
+        base_string = app_secret
+        for key, value in sorted_params:
+            base_string += f"{key}{value}"
+        base_string += app_secret
+        
+        # إنشاء توقيع MD5
+        return hashlib.md5(base_string.encode('utf-8')).hexdigest().upper()
     except Exception as e:
-        logging.error(f"Request failed: {e}")
+        logger.error(f"Error generating signature: {e}")
+        return None
+
+async def search_aliexpress_products(keyword):
+    """البحث عن منتجات في AliExpress"""
+    try:
+        # معلمات API
+        params = {
+            "app_key": APP_ID,
+            "method": "aliexpress.affiliate.product.query",
+            "sign_method": "md5",
+            "timestamp": str(int(time.time() * 1000)),  # وقت بالمللي ثانية
+            "format": "json",
+            "v": "2.0",
+            "keywords": keyword,
+            "fields": "productId,productTitle,productMainImageUrl,productUrl,promotionLink,originalPrice,salePrice",
+            "page_size": "3"
+        }
+        
+        # إنشاء التوقيع
+        signature = generate_signature(params, APP_SECRET)
+        if not signature:
+            return None
+            
+        params["sign"] = signature
+        
+        # عنوان API الجديد
+        api_url = "https://api-sg.aliexpress.com/rest"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, params=params, timeout=30) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.info(f"API Response: {json.dumps(data, indent=2)}")
+                    return data
+                else:
+                    logger.error(f"API Error: Status {response.status}")
+                    return None
+                    
+    except aiohttp.ClientError as e:
+        logger.error(f"Network error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Search error: {e}")
         return None
 
 @dp.message_handler(commands=['start', 'help'])
 async def send_welcome(message: types.Message):
-    """ترحيب بالمستخدم"""
+    """رسالة ترحيب"""
     welcome_text = """
-    🛍️ مرحباً بك في بوت AliExpress!
+    🛍️ *مرحباً بك في بوت AliExpress!*
     
+    *كيفية الاستخدام:*
     فقط اكتب اسم المنتج الذي تريد البحث عنه وسأجد لك أفضل العروض.
     
-    مثال:
-    `iphone case`
-    `laptop bag`
-    `smart watch`
+    *أمثلة:*
+    📱 `iphone case`
+    💻 `laptop bag`
+    ⌚ `smart watch`
+    🎧 `bluetooth headphones`
+    
+    *ملاحظة:* سأعرض لك أول 3 نتائج من AliExpress.
     """
     await message.answer(welcome_text, parse_mode="Markdown")
 
 @dp.message_handler()
-async def handle_message(message: types.Message):
-    """معالجة رسائل المستخدم"""
+async def handle_search(message: types.Message):
+    """معالجة طلبات البحث"""
     keyword = message.text.strip()
     
     if len(keyword) < 2:
-        await message.answer("⚠️ الرجاء إدخال كلمة بحث longer (أكثر من حرفين)")
+        await message.answer("⚠️ الرجاء إدخال كلمة بحث أطول (أكثر من حرفين)")
         return
-
-    await message.answer("🔍 جاري البحث في AliExpress...")
-
+    
+    # إرسال رسالة الانتظار
+    wait_msg = await message.answer("🔍 جاري البحث في AliExpress...")
+    
     try:
-        data = await aliexpress_search(keyword)
+        # البحث عن المنتجات
+        data = await search_aliexpress_products(keyword)
         
         if not data:
             await message.answer("❌ حدث خطأ في الاتصال بالخدمة. الرجاء المحاولة لاحقاً.")
             return
-
-        # التحقق من هيكل البيانات
-        result = data.get("resp_result", {})
-        if "result" not in result:
-            await message.answer("❌ لم يتم العثور على منتجات تطابق بحثك.")
-            return
-
-        items = result["result"].get("products", [])
         
-        if not items:
-            await message.answer("❌ لم يتم العثور على منتجات تطابق بحثك.")
+        # التحقق من وجود أخطاء في الاستجابة
+        error_response = data.get('error_response')
+        if error_response:
+            error_msg = error_response.get('msg', 'خطأ غير معروف في API')
+            await message.answer(f"❌ خطأ في الخدمة: {error_msg}")
             return
-
-        # إرسال أول 3 نتائج
-        for i, item in enumerate(items[:3], 1):
-            title = item.get("product_title", "بدون عنوان")
-            img = item.get("product_main_image_url", "")
-            link = item.get("promotion_link", "")
+        
+        # استخراج المنتجات
+        products = data.get('result', {}).get('products', [])
+        
+        if not products:
+            await message.answer("❌ لم أجد أي منتجات تطابق بحثك. حاول بكلمات أخرى.")
+            return
+        
+        # عرض المنتجات
+        for i, product in enumerate(products[:3], 1):
+            title = product.get('productTitle', 'بدون عنوان')
+            image_url = product.get('productMainImageUrl', '')
+            product_url = product.get('promotionLink', product.get('productUrl', ''))
             
-            # تنظيف العنوان من الأحرف غير المرغوبة
-            title = title.replace('*', '').replace('_', '').replace('`', '')
+            # تنظيف العنوان
+            clean_title = title.replace('*', '').replace('_', '').replace('`', '').replace('[', '').replace(']', '')
             
-            text = f"""🛍️ **المنتج {i}**
-📌 {title}
+            # بناء رسالة المنتج
+            product_text = f"""
+🛍️ *المنتج {i}:*
+*{clean_title}*
 
-🔗 [رابط الشراء]({link})
-"""
-
-            if img:
-                await message.answer_photo(
-                    photo=img, 
-                    caption=text, 
-                    parse_mode="Markdown"
-                )
-            else:
-                await message.answer(text, parse_mode="Markdown")
-                
-        await message.answer("✅ اكتمل البحث! اكتب كلمة جديدة للبحث عن منتجات أخرى.")
-
+🔗 [رابط الشراء على AliExpress]({product_url})
+            """
+            
+            try:
+                if image_url and image_url.startswith('http'):
+                    await message.answer_photo(
+                        photo=image_url,
+                        caption=product_text,
+                        parse_mode="Markdown"
+                    )
+                else:
+                    await message.answer(product_text, parse_mode="Markdown")
+            except Exception as e:
+                logger.error(f"Error sending product {i}: {e}")
+                await message.answer(product_text, parse_mode="Markdown")
+        
+        await message.answer("✅ اكتمل البحث! اكتب كلمة جديدة للبحث عن المزيد من المنتجات.")
+        
     except Exception as e:
-        logging.error(f"Error: {e}")
+        logger.error(f"Unexpected error: {e}")
         await message.answer("⚠️ حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى.")
+    finally:
+        # حذف رسالة الانتظار
+        try:
+            await bot.delete_message(message.chat.id, wait_msg.message_id)
+        except:
+            pass
 
 if __name__ == "__main__":
-    logging.info("Starting bot...")
+    logger.info("🚀 Starting AliExpress Bot...")
     executor.start_polling(dp, skip_updates=True)
