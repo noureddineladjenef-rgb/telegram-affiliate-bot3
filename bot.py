@@ -56,7 +56,7 @@ async def handle_message(message: types.Message):
             img = item.get("product_main_image_url", "")
             link = item.get("promotion_link", "")
             
-            # السطر المصحح - لا توجد أخطاء في f-string
+            # السطر المصحح - تأكد من اكتمال الـ f-string
             text = f"📌 *{title}*\n🔗 {link}"
 
             if img:
