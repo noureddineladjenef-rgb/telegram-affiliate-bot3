@@ -1,5 +1,6 @@
 import logging
-from aiogram import Bot, Dispatcher, executor, types
+from aiogram import Bot, Dispatcher, types
+from aiogram.utils import executor
 import aiohttp
 import hashlib
 import time
