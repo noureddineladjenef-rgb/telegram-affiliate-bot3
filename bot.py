@@ -1,10 +1,15 @@
 import asyncio
 import random
+import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
 # تأكد من صحة التوكن!
 TELEGRAM_TOKEN = "6986501751:AAF0Ra1lpXvdob21IQ9QORLCpclXPUPFyes"
+
+# إعداد اللوغ
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # إنشاء البوت
 bot = Bot(token=TELEGRAM_TOKEN)
@@ -30,11 +35,10 @@ def generate_price(base_price):
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
     """بدء البوت"""
-    text = """
-🎯 *بوت توليد روابط الAffiliate*
+    text = """🎯 *بوت توليد روابط الAffiliate*
 
 🔗 *ماذا أفعل:*
-أحول أي رابط AliExpress إلى روابط affiliate بروابط حقيقية!
+أحول أي رابط AliExpress إلى روابط affiliate!
 
 💰 *سأعطيك 5 روابط بأسعار مختلفة:*
 • السعر العادي
@@ -48,15 +52,13 @@ async def start_cmd(message: types.Message):
 2. انسخ رابط المنتج
 3. أرسل الرابط هنا
 
-*أرسل رابط منتج الآن!*
-"""
+*أرسل رابط منتج الآن!*"""
     await message.answer(text)
 
 @dp.message(Command("help"))
 async def help_cmd(message: types.Message):
     """مساعدة"""
-    text = """
-📋 *طريقة الاستخدام:*
+    text = """📋 *طريقة الاستخدام:*
 
 1. اذهب لـ AliExpress
 2. اختر منتج تريده
@@ -66,8 +68,7 @@ async def help_cmd(message: types.Message):
 🛒 *مثال للرابط:*
 https://www.aliexpress.com/item/4001234567890.html
 
-🎁 *ستحصل على 5 روابط بأسعار مختلفة*
-"""
+🎁 *ستحصل على 5 روابط بأسعار مختلفة*"""
     await message.answer(text)
 
 @dp.message()
@@ -102,8 +103,7 @@ async def process_product_link(message: types.Message, url: str):
         }
         
         # نص النتيجة
-        result_text = f"""
-🔧 *Plastic Welding Gun 70-100W*
+        result_text = f"""🔧 *Plastic Welding Gun 70-100W*
 
 💰 *سعر المنتج بدون تخفيض*
 {prices['original']}
@@ -127,26 +127,23 @@ async def process_product_link(message: types.Message, url: str):
 
 🕐 *الصفحة ستنتهي خلال: 24:00:00*
 
-💸 *عمولة: 8% من كل عملية شراء*
-"""
+💸 *عمولة: 8% من كل عملية شراء*"""
         
         # إرسال النتيجة
         await message.answer(result_text)
         
         # نصائح إضافية
-        tips = """
-💡 *نصائح للربح:*
+        tips = """💡 *نصائح للربح:*
 • شارك الروابط مع الأصدقاء
 • ركز على الروابط المخفضة
 • أنشئ قناة للعروض
 
-🔄 أرسل رابط منتج آخر!
-"""
+🔄 أرسل رابط منتج آخر!"""
         await message.answer(tips)
         
     except Exception as e:
         await message.answer("❌ حدث خطأ، حاول مرة أخرى")
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
     
     finally:
         # حذف رسالة الانتظار
@@ -157,7 +154,7 @@ async def process_product_link(message: types.Message, url: str):
 
 async def main():
     """الدالة الرئيسية"""
-    print("🤖 البوت يعمل الآن...")
+    logger.info("🚀 بدء تشغيل البوت...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
