@@ -1,2 +1,2 @@
-python-telegram-bot==13.15
-requests==2.28.2
+#!/bin/bash
+python bot.py
