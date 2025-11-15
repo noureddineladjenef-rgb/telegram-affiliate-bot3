@@ -1,3 +1,2 @@
-#!/bin/bash
-echo "🚀 Starting AliExpress Affiliate Bot..."
-python bot.py
+python-telegram-bot==13.15
+requests==2.28.2
