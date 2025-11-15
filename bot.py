@@ -1,9 +1,8 @@
 import logging
 import requests
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
-# إعداد بسيط
+# إعداد التسجيل
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -11,10 +10,10 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
 AFFILIATE_ID = "WXwrOePAXsTmqIRPvlxtfTAg45jDFtxC"
 
-def start(update: Update, context: CallbackContext):
+def start(update, context):
     update.message.reply_text("🛍️ أرسل رابط منتج من AliExpress وسأحوله لرابط أفليت")
 
-def handle_message(update: Update, context: CallbackContext):
+def handle_message(update, context):
     user_message = update.message.text.strip()
     
     if 'aliexpress.com' in user_message and 'item' in user_message:
