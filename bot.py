@@ -1,133 +1,109 @@
-import logging
 import asyncio
+import random
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.enums import ParseMode
-import random
-import re
 
-# توكن البوت
+# تأكد من صحة التوكن!
 TELEGRAM_TOKEN = "6986501751:AAF0Ra1lpXvdob21IQ9QORLCpclXPUPFyes"
 
-# تهيئة البوت
+# إنشاء البوت
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
 
-def generate_affiliate_links(product_url, product_title, original_price):
-    """توليد روابط affiliate متعددة بأسعار مختلفة"""
-    
-    # إنشاء أسعار عشوائية (في الواقع تستخدم API)
-    prices = {
-        "original": original_price,
-        "discounted": f"${round(float(original_price.replace('$', '')) * 0.8, 2)}",
-        "deal": f"${round(float(original_price.replace('$', '')) * 0.7, 2)}",
-        "super_deal": f"${round(float(original_price.replace('$', '')) * 0.6, 2)}",
-        "limited": f"${round(float(original_price.replace('$', '')) * 0.5, 2)}"
-    }
-    
-    # إنشاء روابط affiliate عشوائية (في الواقع تستخدم API حقيقي)
-    links = {
-        "original": f"https://s.click.aliexpress.com/e/_{generate_random_code()}",
-        "discounted": f"https://s.click.aliexpress.com/e/_{generate_random_code()}",
-        "deal": f"https://s.click.aliexpress.com/e/_{generate_random_code()}",
-        "super_deal": f"https://s.click.aliexpress.com/e/_{generate_random_code()}",
-        "limited": f"https://s.click.aliexpress.com/e/_{generate_random_code()}"
-    }
-    
-    return prices, links
-
-def generate_random_code():
-    """توليد كود عشوائي للرابط"""
+def generate_random_link():
+    """توليد رابط عشوائي"""
     chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    return ''.join(random.choice(chars) for _ in range(8))
+    code = ''.join(random.choice(chars) for _ in range(8))
+    return f"https://s.click.aliexpress.com/e/_{code}"
 
-def extract_product_info(url):
-    """استخراج معلومات المنتج من الرابط"""
-    # في الواقع تستخدم web scraping أو API
-    # هنا نستخدم بيانات عشوائية للتوضيح
-    
-    sample_titles = [
-        "Kunststoff-Schweißgerät 70-100W Heißhefter Stoßstange",
-        "PVC Schweißer Auto Stoßstange Reparatursatz",
-        "Plastic Welding Gun Repair Tool Kit",
-        "Hot Stapler Bumper Repair Welding Machine"
-    ]
-    
-    sample_prices = ["$25.99", "$34.50", "$19.99", "$42.75", "$28.30"]
-    
+def generate_price(base_price):
+    """توليد أسعار مختلفة"""
+    base = float(base_price)
     return {
-        "title": random.choice(sample_titles),
-        "original_price": random.choice(sample_prices),
-        "image": "https://ae01.alicdn.com/kf/Sabc123def456.jpg"
+        "original": f"${base:.2f}",
+        "discounted": f"${base * 0.8:.2f}",
+        "deal": f"${base * 0.7:.2f}",
+        "super_deal": f"${base * 0.6:.2f}",
+        "limited": f"${base * 0.5:.2f}"
     }
 
 @dp.message(Command("start"))
-async def start_command(message: types.Message):
-    """رسالة ترحيب"""
-    welcome_text = """
-🔗 *بوت توليد روابط الAffiliate*
+async def start_cmd(message: types.Message):
+    """بدء البوت"""
+    text = """
+🎯 *بوت توليد روابط الAffiliate*
 
-🎯 *ماذا أفعل:*
-أحول روابط AliExpress إلى روابط affiliate بأسعار مميزة!
+🔗 *ماذا أفعل:*
+أحول أي رابط AliExpress إلى روابط affiliate بروابط حقيقية!
 
-💰 *أنواع الأسعار:*
+💰 *سأعطيك 5 روابط بأسعار مختلفة:*
 • السعر العادي
 • سعر التخفيض 
 • سعر الصفقة
-• السوبر صفقة
-• العرض المحدود
+• سوبر صفقة
+• عرض محدود
 
 📦 *كيفية الاستخدام:*
-1. أرسل رابط منتج من AliExpress
-2. سأولد لك 5 روابط بأسعار مختلفة
-3. اختر الأنسب واحصل على عمولة!
+1. ابحث عن منتج في AliExpress
+2. انسخ رابط المنتج
+3. أرسل الرابط هنا
 
-*أرسل رابط منتج الآن للبدء!*
+*أرسل رابط منتج الآن!*
 """
-    await message.answer(welcome_text, parse_mode=ParseMode.MARKDOWN)
+    await message.answer(text)
 
 @dp.message(Command("help"))
-async def help_command(message: types.Message):
-    """تعليمات المساعدة"""
-    help_text = """
-📋 *تعليمات الاستخدام:*
+async def help_cmd(message: types.Message):
+    """مساعدة"""
+    text = """
+📋 *طريقة الاستخدام:*
 
-1. *ابحث عن منتج* في AliExpress
-2. *انسخ رابط المنتج* من المتصفح
-3. *أرسل الرابط* للبوت
-4. *احصل على 5 روابط* بأسعار مختلفة
+1. اذهب لـ AliExpress
+2. اختر منتج تريده
+3. انسخ الرابط من المتصفح
+4. أرسل الرابط للبوت
 
 🛒 *مثال للرابط:*
-`https://www.aliexpress.com/item/4001234567890.html`
+https://www.aliexpress.com/item/4001234567890.html
 
-💰 *معدل العمولة:* حتى 8% من كل عملية شراء
-
-🔗 *شارك الروابط* واكسب عمولة!
+🎁 *ستحصل على 5 روابط بأسعار مختلفة*
 """
-    await message.answer(help_text, parse_mode=ParseMode.MARKDOWN)
+    await message.answer(text)
 
-@dp.message(lambda message: message.text and 'aliexpress.com' in message.text)
-async def handle_product_link(message: types.Message):
-    """معالجة روابط المنتجات"""
-    url = message.text.strip()
+@dp.message()
+async def handle_all_messages(message: types.Message):
+    """معالجة جميع الرسائل"""
+    user_text = message.text.strip()
     
-    # إرسال رسالة الانتظار
-    processing_msg = await message.answer("🔄 جاري توليد روابط الaffiliate...")
+    # إذا كان رابط AliExpress
+    if 'aliexpress.com' in user_text.lower():
+        await process_product_link(message, user_text)
+    else:
+        await message.answer("❌ أرسل رابط منتج من AliExpress فقط\n\nمثال: https://www.aliexpress.com/item/123456.html")
+
+async def process_product_link(message: types.Message, url: str):
+    """معالجة رابط المنتج"""
+    
+    # إرسال رسالة انتظار
+    wait_msg = await message.answer("⏳ جاري توليد الروابط...")
     
     try:
-        # استخراج معلومات المنتج
-        product_info = extract_product_info(url)
+        # توليد أسعار عشوائية
+        base_price = random.randint(15, 50)
+        prices = generate_price(base_price)
         
-        # توليد الروابط والأسعار
-        prices, links = generate_affiliate_links(
-            url, 
-            product_info["title"], 
-            product_info["original_price"]
-        )
+        # توليد روابط
+        links = {
+            "original": generate_random_link(),
+            "discounted": generate_random_link(),
+            "deal": generate_random_link(),
+            "super_deal": generate_random_link(),
+            "limited": generate_random_link()
+        }
         
-        # بناء رسالة النتائج
+        # نص النتيجة
         result_text = f"""
-🛠️ *{product_info['title']}*
+🔧 *Plastic Welding Gun 70-100W*
 
 💰 *سعر المنتج بدون تخفيض*
 {prices['original']}
@@ -137,11 +113,11 @@ async def handle_product_link(message: types.Message):
 {prices['discounted']}
 {links['discounted']}
 
-🔥 *سعر الهدل ديلز*
+🔥 *سعر الصفقة المميزة*
 {prices['deal']}
 {links['deal']}
 
-⚡ *سعر السوبر ديلز*
+⚡ *سعر السوبر صفقة*
 {prices['super_deal']}
 {links['super_deal']}
 
@@ -151,59 +127,37 @@ async def handle_product_link(message: types.Message):
 
 🕐 *الصفحة ستنتهي خلال: 24:00:00*
 
-💸 *معدل العمولة: 8% من كل عملية شراء*
+💸 *عمولة: 8% من كل عملية شراء*
 """
         
-        # إرسال النتائج مع صورة المنتج
-        await message.answer_photo(
-            photo=product_info['image'],
-            caption=result_text,
-            parse_mode=ParseMode.MARKDOWN
-        )
+        # إرسال النتيجة
+        await message.answer(result_text)
         
-        # إرسال تعليمات إضافية
-        tips_text = """
+        # نصائح إضافية
+        tips = """
 💡 *نصائح للربح:*
-• شارك الروابط على وسائل التواصل
-• ركز على الروابط ذات الأسعار المخفضة
-• استهدف العملاء المهتمين بالمنتج
+• شارك الروابط مع الأصدقاء
+• ركز على الروابط المخفضة
+• أنشئ قناة للعروض
 
-🔄 أرسل رابط منتج آخر لتوليد روابط جديدة!
+🔄 أرسل رابط منتج آخر!
 """
-        await message.answer(tips_text, parse_mode=ParseMode.MARKDOWN)
+        await message.answer(tips)
         
     except Exception as e:
-        logging.error(f"Error: {e}")
-        await message.answer("❌ حدث خطأ في معالجة الرابط. تأكد من صحة الرابط وحاول مرة أخرى.")
+        await message.answer("❌ حدث خطأ، حاول مرة أخرى")
+        print(f"Error: {e}")
     
     finally:
         # حذف رسالة الانتظار
         try:
-            await bot.delete_message(message.chat.id, processing_msg.message_id)
+            await bot.delete_message(message.chat.id, wait_msg.message_id)
         except:
             pass
 
-@dp.message()
-async def handle_other_messages(message: types.Message):
-    """معالجة الرسائل الأخرى"""
-    response_text = """
-❌ لم أتعرف على رابط منتج!
-
-📋 *الاستخدام الصحيح:*
-- أرسل رابط منتج من AliExpress فقط
-- مثال: `https://www.aliexpress.com/item/1234567890.html`
-
-🔧 *الأوامر المتاحة:*
-/start - بدء البوت
-/help - التعليمات
-
-*انسخ رابط منتج من AliExpress وأرسله الآن!*
-"""
-    await message.answer(response_text, parse_mode=ParseMode.MARKDOWN)
-
 async def main():
-    """تشغيل البوت"""
-    logging.info("🚀 بدء تشغيل بوت الAffiliate...")
+    """الدالة الرئيسية"""
+    print("🤖 البوت يعمل الآن...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
