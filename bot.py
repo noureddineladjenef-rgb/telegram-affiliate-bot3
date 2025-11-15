@@ -1,79 +1,51 @@
-import os
 import logging
-from flask import Flask, request
+import requests
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# محاولة استيراد المكتبات مع معالجة الأخطاء
-try:
-    import telebot
-    from telebot import types
-    TELEBOT_AVAILABLE = True
-except ImportError as e:
-    logging.error(f"Telebot import error: {e}")
-    TELEBOT_AVAILABLE = False
+# إعداد بسيط
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-try:
-    import requests
-    REQUESTS_AVAILABLE = True
-except ImportError:
-    REQUESTS_AVAILABLE = False
+# التوكن والمعرف
+BOT_TOKEN = "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
+AFFILIATE_ID = "WXwrOePAXsTmqIRPvlxtfTAg45jDFtxC"
 
-# إعداد التطبيق
-app = Flask(__name__)
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("🛍️ أرسل رابط منتج من AliExpress وسأحوله لرابط أفليت")
 
-# تهيئة البوت إذا كانت المكتبات متاحة
-if TELEBOT_AVAILABLE:
-    BOT_TOKEN = os.environ.get('BOT_TOKEN')
-    if BOT_TOKEN:
-        bot = telebot.TeleBot(BOT_TOKEN)
-    else:
-        logging.error("BOT_TOKEN not found")
-        bot = None
-else:
-    bot = None
-    logging.error("pyTelegramBotAPI is not installed")
-
-# صفحة الرئيسية
-@app.route('/')
-def home():
-    if not TELEBOT_AVAILABLE:
-        return "❌ Error: pyTelegramBotAPI not installed. Check requirements.txt"
-    elif not BOT_TOKEN:
-        return "❌ Error: BOT_TOKEN not set in environment variables"
-    else:
-        return "✅ Bot is running on Render!"
-
-# ويبهوك للتلغرام
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    if not bot:
-        return "Bot not initialized", 500
+def handle_message(update: Update, context: CallbackContext):
+    user_message = update.message.text.strip()
     
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return ''
-    return 'OK'
-
-# أوامر البوت (فقط إذا كان البوت متاحاً)
-if bot:
-    @bot.message_handler(commands=['start'])
-    def send_welcome(message):
-        if bot:
-            bot.reply_to(message, "🎯 البوت يعمل بنجاح على Render!")
-
-# تشغيل التطبيق
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    
-    if bot and BOT_TOKEN:
-        # إعداد ويبهوك للسيرفر
-        webhook_url = f"https://{os.environ.get('RENDER_APP_NAME', 'your-app')}.onrender.com/webhook"
+    if 'aliexpress.com' in user_message and 'item' in user_message:
         try:
-            bot.remove_webhook()
-            bot.set_webhook(url=webhook_url)
-            logging.info(f"Webhook set to: {webhook_url}")
+            # تحويل الرابط
+            encoded_url = requests.utils.quote(user_message)
+            affiliate_link = f"https://s.click.aliexpress.com/e/{AFFILIATE_ID}?url={encoded_url}"
+            
+            # إرسال النتيجة
+            update.message.reply_text(f"✅ تم التحويل:\n{affiliate_link}")
+            
         except Exception as e:
-            logging.error(f"Webhook error: {e}")
-    
-    app.run(host='0.0.0.0', port=port, debug=False)
+            update.message.reply_text("❌ حدث خطأ في التحويل")
+    else:
+        update.message.reply_text("❌ أرسل رابط منتج صالح من AliExpress")
+
+def main():
+    try:
+        logger.info("بدء البوت...")
+        updater = Updater(BOT_TOKEN, use_context=True)
+        dp = updater.dispatcher
+        
+        dp.add_handler(CommandHandler("start", start))
+        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+        
+        logger.info("البوت يعمل...")
+        updater.start_polling()
+        updater.idle()
+        
+    except Exception as e:
+        logger.error(f"خطأ: {e}")
+
+if __name__ == '__main__':
+    main()
