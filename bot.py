@@ -2,7 +2,7 @@ import os
 import logging
 import requests
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
 AFFILIATE_ID = "WXwrOePAXsTmqIRPvlxtfTAg45jDFtxC"
 
-def convert_to_affiliate_link(product_url: str) -> str:
+def convert_to_affiliate_link(product_url):
     """تحويل رابط المنتج إلى رابط أفليت"""
     try:
         encoded_url = requests.utils.quote(product_url)
@@ -25,11 +25,11 @@ def convert_to_affiliate_link(product_url: str) -> str:
         logger.error(f"Error converting link: {e}")
         return None
 
-def is_valid_aliexpress_link(url: str) -> bool:
+def is_valid_aliexpress_link(url):
     """التحقق من أن الرابط من AliExpress"""
     return 'aliexpress.com' in url and 'item' in url
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def start(update, context):
     """رسالة الترحيب"""
     welcome_text = """
 🛍️ *مرحباً بك في بوت تحويل روابط AliExpress* 🛍️
@@ -46,9 +46,9 @@ https://www.aliexpress.com/item/1005006123456789.html
 
 🚀 *ابدأ الآن بإرسال الرابط!*
     """
-    await update.message.reply_text(welcome_text)
+    update.message.reply_text(welcome_text)
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def help_command(update, context):
     """أمر المساعدة"""
     help_text = """
 📖 *دليل استخدام البوت*
@@ -63,9 +63,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 3. أرسل الرابط للبوت
 4. سيُعيد لك رابط الأفليت الجديد
     """
-    await update.message.reply_text(help_text)
+    update.message.reply_text(help_text)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def handle_message(update, context):
     """معالجة رسائل المستخدم"""
     user_message = update.message.text.strip()
     
@@ -78,7 +78,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📌 *مثال صحيح:*
 https://www.aliexpress.com/item/1005006123456789.html
         """
-        await update.message.reply_text(error_text)
+        update.message.reply_text(error_text)
         return
     
     try:
@@ -93,12 +93,12 @@ https://www.aliexpress.com/item/1005006123456789.html
 
 💰 *شارك هذا الرابط لربح العمولات!*
             """
-            await update.message.reply_text(success_text)
+            update.message.reply_text(success_text)
         else:
-            await update.message.reply_text("❌ حدث خطأ أثناء تحويل الرابط")
+            update.message.reply_text("❌ حدث خطأ أثناء تحويل الرابط")
             
     except Exception as e:
-        await update.message.reply_text("❌ حدث خطأ غير متوقع")
+        update.message.reply_text("❌ حدث خطأ غير متوقع")
         logger.error(f"Error: {e}")
 
 def main():
@@ -106,17 +106,21 @@ def main():
     try:
         logger.info("Starting AliExpress Affiliate Bot...")
         
-        # إنشاء التطبيق
-        application = Application.builder().token(BOT_TOKEN).build()
+        # إنشاء Updater
+        updater = Updater(BOT_TOKEN, use_context=True)
+        
+        # الحصول على الـ Dispatcher
+        dp = updater.dispatcher
         
         # إضافة المعالجات
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        dp.add_handler(CommandHandler("start", start))
+        dp.add_handler(CommandHandler("help", help_command))
+        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
         
         # بدء البوت
         logger.info("Bot is running and ready...")
-        application.run_polling()
+        updater.start_polling()
+        updater.idle()
         
     except Exception as e:
         logger.error(f"Failed to start bot: {e}")
