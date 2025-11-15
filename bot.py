@@ -1,4 +1,3 @@
-import os
 import logging
 import requests
 from telegram import Update
@@ -29,35 +28,35 @@ def is_valid_aliexpress_link(url):
     """التحقق من أن الرابط من AliExpress"""
     return 'aliexpress.com' in url and 'item' in url
 
-def start(update, context):
+def start(update: Update, context: CallbackContext):
     """رسالة الترحيب"""
     welcome_text = """
-🛍️ *مرحباً بك في بوت تحويل روابط AliExpress* 🛍️
+🛍️ مرحباً بك في بوت تحويل روابط AliExpress 🛍️
 
-🤖 *ماذا أستطيع أن أفعل؟*
+🤖 ماذا أستطيع أن أفعل؟
 • تحويل روابط منتجات AliExpress إلى روابط أفليت
 
-📌 *كيفية الاستخدام؟*
+📌 كيفية الاستخدام؟
 1. أرسل لي رابط أي منتج من AliExpress
 2. سأحوله لك إلى رابط أفليت
 
-🎯 *مثال للرابط:*
+🎯 مثال للرابط:
 https://www.aliexpress.com/item/1005006123456789.html
 
-🚀 *ابدأ الآن بإرسال الرابط!*
+🚀 ابدأ الآن بإرسال الرابط!
     """
     update.message.reply_text(welcome_text)
 
-def help_command(update, context):
+def help_command(update: Update, context: CallbackContext):
     """أمر المساعدة"""
     help_text = """
-📖 *دليل استخدام البوت*
+📖 دليل استخدام البوت
 
-🔹 *الأوامر المتاحة:*
+🔹 الأوامر المتاحة:
 /start - بدء استخدام البوت
 /help - عرض هذه الرسالة
 
-🔹 *طريقة العمل:*
+🔹 طريقة العمل:
 1. ابحث عن منتج في AliExpress
 2. انسخ رابط المنتج
 3. أرسل الرابط للبوت
@@ -65,17 +64,18 @@ def help_command(update, context):
     """
     update.message.reply_text(help_text)
 
-def handle_message(update, context):
+def handle_message(update: Update, context: CallbackContext):
     """معالجة رسائل المستخدم"""
     user_message = update.message.text.strip()
+    logger.info(f"Received: {user_message}")
     
     if not is_valid_aliexpress_link(user_message):
         error_text = """
-❌ *رابط غير مدعوم*
+❌ رابط غير مدعوم
 
 يرجى إرسال رابط منتج صالح من AliExpress
 
-📌 *مثال صحيح:*
+📌 مثال صحيح:
 https://www.aliexpress.com/item/1005006123456789.html
         """
         update.message.reply_text(error_text)
@@ -86,14 +86,15 @@ https://www.aliexpress.com/item/1005006123456789.html
         
         if affiliate_link:
             success_text = f"""
-✅ *تم تحويل الرابط بنجاح!*
+✅ تم تحويل الرابط بنجاح!
 
-🎯 *رابط الأفليت الجديد:*
-`{affiliate_link}`
+🎯 رابط الأفليت الجديد:
+{affiliate_link}
 
-💰 *شارك هذا الرابط لربح العمولات!*
+💰 شارك هذا الرابط لربح العمولات!
             """
             update.message.reply_text(success_text)
+            logger.info(f"Converted: {affiliate_link}")
         else:
             update.message.reply_text("❌ حدث خطأ أثناء تحويل الرابط")
             
@@ -104,7 +105,7 @@ https://www.aliexpress.com/item/1005006123456789.html
 def main():
     """الدالة الرئيسية"""
     try:
-        logger.info("Starting AliExpress Affiliate Bot...")
+        logger.info("🚀 Starting AliExpress Affiliate Bot...")
         
         # إنشاء Updater
         updater = Updater(BOT_TOKEN, use_context=True)
@@ -118,12 +119,12 @@ def main():
         dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
         
         # بدء البوت
-        logger.info("Bot is running and ready...")
+        logger.info("✅ Bot is running and ready...")
         updater.start_polling()
         updater.idle()
         
     except Exception as e:
-        logger.error(f"Failed to start bot: {e}")
+        logger.error(f"❌ Failed to start bot: {e}")
 
 if __name__ == '__main__':
     main()
