@@ -1,57 +1,79 @@
 import logging
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
+import aiohttp
 import hashlib
 import time
-import urllib.parse
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-# -----------------------------------------
-#   🔐 بياناتك الخاصة (تم إدخالها كما طلبت)
-# -----------------------------------------
-TELEGRAM_TOKEN = "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
-APP_KEY = "503368"  
+# بيانات البوت والأفلييت
+BOT_TOKEN = "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
+APP_KEY = "503368"
 APP_SECRET = "OMIS6a8bKcWrUsu5Bsr34NooT9yYwB3q"
-AFFILIATE_ID = "503368"
-# -----------------------------------------
+
+API_URL = "https://gw.api.alibaba.com/openapi/param2/2/portals.open/api.createPromotionLink/"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def generate_affiliate_link(original_url: str) -> str:
-    """Generate AliExpress affiliate deep link"""
-
-    encoded_url = urllib.parse.quote(original_url, safe='')
-    timestamp = str(int(time.time() * 1000))
-
-    raw = f"app_key={APP_KEY}&link={encoded_url}&timestamp={timestamp}{APP_SECRET}"
-    sign = hashlib.md5(raw.encode('utf-8')).hexdigest()
-
-    affiliate_url = (
-        f"https://api.aliexpress.com/link/generate?"
-        f"app_key={APP_KEY}&timestamp={timestamp}&sign={sign}"
-        f"&link={encoded_url}&tracking_id={AFFILIATE_ID}"
-    )
-
-    return affiliate_url
+# توليد توقيع الطلب (signature)
+def generate_sign(params: dict) -> str:
+    sorted_params = "".join(f"{k}{v}" for k, v in sorted(params.items()))
+    to_sign = APP_SECRET + sorted_params + APP_SECRET
+    return hashlib.md5(to_sign.encode()).hexdigest().upper()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("أرسل رابط AliExpress وسأحوله لرابط أفليت 🔥")
+    await update.message.reply_text(
+        "🛍️ مرحباً بك! أرسل لي رابط منتج AliExpress وسأعطيك رابط أفلييت صالح."
+    )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+    product_url = update.message.text.strip()
+    user_id = update.message.from_user.id
 
-    if "aliexpress" not in text.lower():
-        await update.message.reply_text("❗ الرجاء إرسال رابط من AliExpress فقط.")
+    # التحقق من صحة الرابط
+    if "aliexpress" not in product_url.lower():
+        await update.message.reply_text("❌ الرجاء إرسال رابط صحيح من AliExpress فقط.")
         return
 
-    affiliate_link = generate_affiliate_link(text)
-    await update.message.reply_text(f"🔗 رابط الأفليت الخاص بك:\n{affiliate_link}")
+    processing_msg = await update.message.reply_text("⏳ جاري إنشاء رابط الأفلييت...")
+
+    # إعداد معلمات API
+    params = {
+        "app_key": APP_KEY,
+        "timestamp": str(int(time.time() * 1000)),
+        "targetUrl": product_url,
+        "format": "json",
+    }
+
+    params["sign"] = generate_sign(params)
+
+    # إرسال الطلب
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(API_URL, params=params, timeout=30) as resp:
+                if resp.status != 200:
+                    await processing_msg.edit_text(f"❌ خطأ في الخادم: {resp.status}")
+                    return
+
+                data = await resp.json()
+                logger.info(f"API Response for user {user_id}: {data}")
+
+                # التحقق من وجود رابط صحيح في الاستجابة
+                if "result" in data and "promotionLink" in data["result"]:
+                    affiliate_link = data["result"]["promotionLink"]
+                    await processing_msg.edit_text(f"🔗 رابط الأفلييت الخاص بك:\n{affiliate_link}")
+                else:
+                    await processing_msg.edit_text("❌ لم يتم إنشاء رابط أفلييت. تأكد من الرابط أو بيانات API.")
+
+        except Exception as e:
+            logger.error(f"Error while calling API: {e}")
+            await processing_msg.edit_text(f"❌ حدث خطأ أثناء الاتصال بالـ API:\n{e}")
 
 
 def main():
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
