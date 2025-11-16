@@ -1,50 +1,72 @@
 import logging
-import requests
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import aiohttp
+import hashlib
+import time
+import os
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-# إعداد التسجيل
+# استخدام Environment Variables
+BOT_TOKEN = os.environ.get("8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ")
+APP_KEY = os.environ.get("503368")
+APP_SECRET = os.environ.get("OMIS6a8bKcWrUsu5Bsr34NooT9yYwB3q")
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# التوكن والمعرف
-BOT_TOKEN = "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
-AFFILIATE_ID = "WXwrOePAXsTmqIRPvlxtfTAg45jDFtxC"
+# AliExpress Open API endpoint
+API_URL = "https://gw.api.alibaba.com/openapi/param2/2/portals.open/api.createPromotionLink/"
 
-def start(update, context):
-    update.message.reply_text("🛍️ أرسل رابط منتج من AliExpress وسأحوله لرابط أفليت")
+def generate_sign(params):
+    sorted_params = "".join(f"{k}{v}" for k, v in sorted(params.items()))
+    to_sign = APP_SECRET + sorted_params + APP_SECRET
+    return hashlib.md5(to_sign.encode()).hexdigest().upper()
 
-def handle_message(update, context):
-    user_message = update.message.text.strip()
-    
-    if 'aliexpress.com' in user_message and 'item' in user_message:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "مرحباً! أرسل لي أي رابط منتج من AliExpress وسأعطيك رابط أفلييت مباشر."
+    )
+
+async def generate_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    product_url = update.message.text.strip()
+
+    if "aliexpress" not in product_url:
+        await update.message.reply_text("يرجى إرسال رابط صالح من AliExpress.")
+        return
+
+    params = {
+        "app_key": APP_KEY,
+        "timestamp": int(time.time() * 1000),
+        "targetUrl": product_url,
+        "format": "json",
+    }
+
+    params["sign"] = generate_sign(params)
+
+    async with aiohttp.ClientSession() as session:
         try:
-            # تحويل الرابط
-            encoded_url = requests.utils.quote(user_message)
-            affiliate_link = f"https://s.click.aliexpress.com/e/{AFFILIATE_ID}?url={encoded_url}"
-            
-            # إرسال النتيجة
-            update.message.reply_text(f"✅ تم التحويل:\n{affiliate_link}")
-            
+            async with session.get(API_URL, params=params) as resp:
+                data = await resp.json()
+                logger.info(data)
+
+                try:
+                    affiliate_link = data["promotionLink"]["promotionUrl"]
+                    await update.message.reply_text(f"✅ رابط الأفلييت:\n{affiliate_link}")
+                except:
+                    await update.message.reply_text(
+                        "فشل استخراج رابط الأفلييت. تحقق من APP_KEY و APP_SECRET أو من الرابط."
+                    )
         except Exception as e:
-            update.message.reply_text("❌ حدث خطأ في التحويل")
-    else:
-        update.message.reply_text("❌ أرسل رابط منتج صالح من AliExpress")
+            logger.error(e)
+            await update.message.reply_text(
+                "خطأ في الاتصال بالـ API. تأكد من صحة APP_KEY و APP_SECRET."
+            )
 
 def main():
-    try:
-        logger.info("بدء البوت...")
-        updater = Updater(BOT_TOKEN, use_context=True)
-        dp = updater.dispatcher
-        
-        dp.add_handler(CommandHandler("start", start))
-        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-        
-        logger.info("البوت يعمل...")
-        updater.start_polling()
-        updater.idle()
-        
-    except Exception as e:
-        logger.error(f"خطأ: {e}")
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generate_affiliate))
+    app.run_polling()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
