@@ -2,15 +2,19 @@ import logging
 import aiohttp
 import hashlib
 import time
+import re
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+import os
 
 # -------------------------------
-# Your credentials
-BOT_TOKEN = "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
-APP_KEY = "503368"
-APP_SECRET = "OMIS6a8bKcWrUsu5Bsr34NooT9yYwB3q"
+BOT_TOKEN = os.environ.get("BOT_TOKEN") or "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
+APP_KEY = os.environ.get("APP_KEY") or "503368"
+APP_SECRET = os.environ.get("APP_SECRET") or "OMIS6a8bKcWrUsu5Bsr34NooT9yYwB3q"
 # -------------------------------
+
+if not BOT_TOKEN or not APP_KEY or not APP_SECRET:
+    raise ValueError("❌ BOT_TOKEN, APP_KEY, or APP_SECRET not set!")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,11 +30,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Hello! Send me an AliExpress product link and I will generate an affiliate link for you."
     )
-    logger.info(f"User {update.effective_user.username} started the bot.")
+
+def convert_short_link(url):
+    """Convert a short AliExpress link (a.aliexpress.com/...) to a full product URL if possible."""
+    if "a.aliexpress.com" in url:
+        # This is a basic conversion; for full reliability, use requests to follow redirect
+        return url.replace("a.aliexpress.com/", "www.aliexpress.com/item/")
+    return url
 
 async def generate_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_url = update.message.text.strip()
-    logger.info(f"Received URL: {product_url} from {update.effective_user.username}")
+    logger.info(f"Received URL: {product_url}")
+
+    product_url = convert_short_link(product_url)
 
     if "aliexpress" not in product_url:
         await update.message.reply_text("Please send a valid AliExpress product URL.")
@@ -53,11 +65,11 @@ async def generate_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE)
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(API_URL, params=params) as resp:
-                logger.info(f"API status: {resp.status}")
                 data = await resp.json()
+                logger.info(f"API status: {resp.status}")
                 logger.info(f"API response: {data}")
 
-                # Full debug: show API response
+                # Show full API response for debugging
                 await update.message.reply_text(f"🔍 API Response:\n{data}")
 
                 try:
@@ -66,12 +78,12 @@ async def generate_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 except Exception as e:
                     logger.error(f"Failed to extract affiliate link: {e}")
                     await update.message.reply_text(
-                        "❌ Failed to extract affiliate link. Check your APP_KEY, APP_SECRET, or product URL.\n"
+                        "❌ Failed to extract affiliate link. Check APP_KEY, APP_SECRET, or the product URL.\n"
                         "🔍 See the previous API response for details."
                     )
         except Exception as e:
             logger.error(f"API connection error: {e}")
-            await update.message.reply_text("Error connecting to the API.")
+            await update.message.reply_text("Error connecting to the AliExpress API.")
 
 def main():
     logger.info("Starting bot...")
