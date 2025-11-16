@@ -6,7 +6,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 # -------------------------------
-# معلوماتك الخاصة
+# Your credentials
 BOT_TOKEN = "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
 APP_KEY = "503368"
 APP_SECRET = "OMIS6a8bKcWrUsu5Bsr34NooT9yYwB3q"
@@ -24,7 +24,7 @@ def generate_sign(params):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "مرحباً! أرسل لي رابط منتج من AliExpress وسأعطيك رابط أفلييت."
+        "Hello! Send me an AliExpress product link and I will generate an affiliate link for you."
     )
     logger.info(f"User {update.effective_user.username} started the bot.")
 
@@ -33,7 +33,7 @@ async def generate_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE)
     logger.info(f"Received URL: {product_url} from {update.effective_user.username}")
 
     if "aliexpress" not in product_url:
-        await update.message.reply_text("يرجى إرسال رابط صالح من AliExpress.")
+        await update.message.reply_text("Please send a valid AliExpress product URL.")
         return
 
     params = {
@@ -47,7 +47,7 @@ async def generate_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE)
         params["sign"] = generate_sign(params)
     except Exception as e:
         logger.error(f"Error generating sign: {e}")
-        await update.message.reply_text("خطأ في توليد التوقيع. تحقق من APP_SECRET.")
+        await update.message.reply_text("Error generating the signature. Check APP_SECRET.")
         return
 
     async with aiohttp.ClientSession() as session:
@@ -57,17 +57,21 @@ async def generate_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 data = await resp.json()
                 logger.info(f"API response: {data}")
 
+                # Full debug: show API response
+                await update.message.reply_text(f"🔍 API Response:\n{data}")
+
                 try:
                     affiliate_link = data["promotionLink"]["promotionUrl"]
-                    await update.message.reply_text(f"✅ رابط الأفلييت:\n{affiliate_link}")
+                    await update.message.reply_text(f"✅ Affiliate link:\n{affiliate_link}")
                 except Exception as e:
                     logger.error(f"Failed to extract affiliate link: {e}")
                     await update.message.reply_text(
-                        "فشل استخراج رابط الأفلييت. تحقق من APP_KEY و APP_SECRET أو الرابط."
+                        "❌ Failed to extract affiliate link. Check your APP_KEY, APP_SECRET, or product URL.\n"
+                        "🔍 See the previous API response for details."
                     )
         except Exception as e:
             logger.error(f"API connection error: {e}")
-            await update.message.reply_text("خطأ في الاتصال بالـ API.")
+            await update.message.reply_text("Error connecting to the API.")
 
 def main():
     logger.info("Starting bot...")
