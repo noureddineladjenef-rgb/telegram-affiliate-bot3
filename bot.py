@@ -2,19 +2,19 @@ import logging
 import aiohttp
 import hashlib
 import time
-import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-# استخدام Environment Variables
-BOT_TOKEN = os.environ.get("8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ")
-APP_KEY = os.environ.get("503368")
-APP_SECRET = os.environ.get("OMIS6a8bKcWrUsu5Bsr34NooT9yYwB3q")
+# -------------------------------
+# معلوماتك الخاصة
+BOT_TOKEN = "8548245901:AAHtOUGOZfXFvANxFzxgaGBUP34bS6cNAiQ"
+APP_KEY = "503368"
+APP_SECRET = "OMIS6a8bKcWrUsu5Bsr34NooT9yYwB3q"
+# -------------------------------
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# AliExpress Open API endpoint
 API_URL = "https://gw.api.alibaba.com/openapi/param2/2/portals.open/api.createPromotionLink/"
 
 def generate_sign(params):
@@ -24,11 +24,13 @@ def generate_sign(params):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "مرحباً! أرسل لي أي رابط منتج من AliExpress وسأعطيك رابط أفلييت مباشر."
+        "مرحباً! أرسل لي رابط منتج من AliExpress وسأعطيك رابط أفلييت."
     )
+    logger.info(f"User {update.effective_user.username} started the bot.")
 
 async def generate_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_url = update.message.text.strip()
+    logger.info(f"Received URL: {product_url} from {update.effective_user.username}")
 
     if "aliexpress" not in product_url:
         await update.message.reply_text("يرجى إرسال رابط صالح من AliExpress.")
@@ -41,32 +43,42 @@ async def generate_affiliate(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "format": "json",
     }
 
-    params["sign"] = generate_sign(params)
+    try:
+        params["sign"] = generate_sign(params)
+    except Exception as e:
+        logger.error(f"Error generating sign: {e}")
+        await update.message.reply_text("خطأ في توليد التوقيع. تحقق من APP_SECRET.")
+        return
 
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(API_URL, params=params) as resp:
+                logger.info(f"API status: {resp.status}")
                 data = await resp.json()
-                logger.info(data)
+                logger.info(f"API response: {data}")
 
                 try:
                     affiliate_link = data["promotionLink"]["promotionUrl"]
                     await update.message.reply_text(f"✅ رابط الأفلييت:\n{affiliate_link}")
-                except:
+                except Exception as e:
+                    logger.error(f"Failed to extract affiliate link: {e}")
                     await update.message.reply_text(
-                        "فشل استخراج رابط الأفلييت. تحقق من APP_KEY و APP_SECRET أو من الرابط."
+                        "فشل استخراج رابط الأفلييت. تحقق من APP_KEY و APP_SECRET أو الرابط."
                     )
         except Exception as e:
-            logger.error(e)
-            await update.message.reply_text(
-                "خطأ في الاتصال بالـ API. تأكد من صحة APP_KEY و APP_SECRET."
-            )
+            logger.error(f"API connection error: {e}")
+            await update.message.reply_text("خطأ في الاتصال بالـ API.")
 
 def main():
+    logger.info("Starting bot...")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generate_affiliate))
-    app.run_polling()
+
+    try:
+        app.run_polling()
+    except Exception as e:
+        logger.error(f"Bot failed to run: {e}")
 
 if __name__ == "__main__":
     main()
